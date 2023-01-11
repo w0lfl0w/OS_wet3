@@ -8,6 +8,7 @@
 #include <sstream>
 #include <list>
 #include <cmath>
+#include <sys/socket.h>
 
 
 #define MAX_SOCKET_MSG_SIZE 516 // that size is in bytes
@@ -32,6 +33,26 @@ int main(int argc, char **argv) {
     if (!arguments_flag) {
         cerr << "TTFPT_ERROR: illegal arguments" << endl;
         exit(0);
+    }
+
+    unsigned short socket_protocol = atoi(argv[1]);
+    ///                                              SOCK_DGRAM = UDP
+    int server_socket_fd = socket(AF_INET , SOCK_DGRAM, socket_protocol);
+
+    /// infinite run loop
+    while (true) {
+
+        /// listen on UDP PORT
+
+        /// WRQ request received, send an ack packet
+
+        /// wait for packet
+
+        /// send ack after each packet received
+
+        /// end communication if got a data packet shorter than 516
+
+
     }
 
 
