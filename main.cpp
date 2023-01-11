@@ -11,6 +11,8 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 //#include <netinet.h>
+#include <netinet/in.h>
+#include <netdb.h>
 
 
 
@@ -57,15 +59,14 @@ int main(int argc, char **argv) {
     //int setsockopt(int server_socket_fd, int level, int optname,  const void *optval, socklen_t optlen);
 
     /// init the environment for the sockaddr struct
-    struct sockaddr * host_address;
+    struct sockaddr_in host_address = {0};
 
-    host_address->sa_family = AF_INET;
-
-  //  address.sin_addr.s_addr = INADDR_ANY;
-   // address.sin_port = htons(PORT);
+    host_address.sin_family = AF_INET;
+    host_address.sin_port = htons(port);
+    host_address.sin_addr.s_addr = INADDR_ANY;
 
     /// assigns the address and port to the socket
-    int bind_return_value =  bind(server_socket_fd, host_address, sizeof(host_address) );
+    int bind_return_value = bind(server_socket_fd, (struct sockaddr *)&host_address, sizeof(host_address));
 
     if (bind_return_value < 0) {
         perror("TTFTP_ERROR");
