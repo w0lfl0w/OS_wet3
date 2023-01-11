@@ -9,6 +9,9 @@
 #include <list>
 #include <cmath>
 #include <sys/socket.h>
+#include <sys/types.h>
+//#include <netinet.h>
+
 
 
 #define MAX_SOCKET_MSG_SIZE 516 // that size is in bytes
@@ -53,7 +56,21 @@ int main(int argc, char **argv) {
     /// optional stronger init to add after calling socket(), add if getting errors like “address already in use”
     //int setsockopt(int server_socket_fd, int level, int optname,  const void *optval, socklen_t optlen);
 
-    /// assigns the address specified by addr to the socket
+    /// init the environment for the sockaddr struct
+    struct sockaddr * host_address;
+
+    host_address->sa_family = AF_INET;
+
+  //  address.sin_addr.s_addr = INADDR_ANY;
+   // address.sin_port = htons(PORT);
+
+    /// assigns the address and port to the socket
+    int bind_return_value =  bind(server_socket_fd, host_address, sizeof(host_address) );
+
+    if (bind_return_value < 0) {
+        perror("TTFTP_ERROR");
+        exit(0);
+    }
 
     /// infinite run loop
     while (true) {
