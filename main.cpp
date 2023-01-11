@@ -21,9 +21,8 @@ using std::cerr;
 using std::ifstream;
 using std::stringstream;
 
-
+/// single thread \ process implementation
 int main(int argc, char **argv) {
-
     /// checkig for valid arguments - the command line is in the for of ./ttftps <port> <timeout> <max_num_of_resends>
     bool arguments_flag = true;
     arguments_flag = (argc == 4) && (atoi(argv[1]) <= MAX_UNSIGNED_SHORT) && (atoi(argv[1]) >= 0) &&
