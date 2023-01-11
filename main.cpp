@@ -42,6 +42,7 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
+    /// init a socket
     int server_socket_fd = socket(AF_INET, SOCK_DGRAM, 0); /// SOCK_DGRAM = UDP
 
     if (server_socket_fd < 0) {
@@ -49,6 +50,10 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
+    /// optional stronger init to add after calling socket(), add if getting errors like “address already in use”
+    //int setsockopt(int server_socket_fd, int level, int optname,  const void *optval, socklen_t optlen);
+
+    /// assigns the address specified by addr to the socket
 
     /// infinite run loop
     while (true) {
