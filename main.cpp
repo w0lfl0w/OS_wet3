@@ -26,18 +26,29 @@ using std::stringstream;
 int main(int argc, char **argv) {
     /// checkig for valid arguments - the command line is in the for of ./ttftps <port> <timeout> <max_num_of_resends>
     bool arguments_flag = true;
-    arguments_flag = (argc == 4) && (atoi(argv[1]) <= MAX_UNSIGNED_SHORT) && (atoi(argv[1]) >= 0) &&
-                     (atoi(argv[2]) <= MAX_UNSIGNED_SHORT) && (atoi(argv[2]) >= 0) &&
-                     (atoi(argv[3]) <= MAX_UNSIGNED_SHORT) && (atoi(argv[3]) >= 0);
+
+    unsigned int port = atoi(argv[1]);
+    unsigned int timeout = atoi(argv[2]);
+    unsigned int max_num_of_resends = atoi(argv[3]);
+
+    ////////////////////////////////////////// debuging ///////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    arguments_flag = (argc == 4) && (port <= MAX_UNSIGNED_SHORT) && (port >= 0) &&
+                     (timeout <= MAX_UNSIGNED_SHORT) && (timeout >= 0) &&
+                     (max_num_of_resends <= MAX_UNSIGNED_SHORT) && (max_num_of_resends >= 0);
 
     if (!arguments_flag) {
-        cerr << "TTFPT_ERROR: illegal arguments" << endl;
+        perror("TTFPT_ERROR: illegal arguments");
         exit(0);
     }
 
-    unsigned short socket_protocol = atoi(argv[1]);
-    ///                                              SOCK_DGRAM = UDP
-    int server_socket_fd = socket(AF_INET , SOCK_DGRAM, socket_protocol);
+    int server_socket_fd = socket(AF_INET, SOCK_DGRAM, 0); /// SOCK_DGRAM = UDP
+
+    if (server_socket_fd < 0) {
+        perror("TTFTP_ERROR");
+        exit(0);
+    }
+
 
     /// infinite run loop
     while (true) {

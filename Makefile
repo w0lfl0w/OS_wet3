@@ -1,6 +1,6 @@
 # Makefile for the TTFTP program
 CC = g++
-CFLAGS = -std=c++11 -Wall -g -Werror -pedantic-errors -DNDEBUG -pthread
+CFLAGS = -std=c++11 -Wall -g -Werror -pedantic-errors -DNDEBUG
 CCLINK = $(CC)
 OBJS = main.o
 RM = rm -f
