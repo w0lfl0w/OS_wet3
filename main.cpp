@@ -208,10 +208,11 @@ int main(int argc, char **argv) {
     struct sockaddr_in server_address = {0};
     struct sockaddr_in curr_client = {0};
     struct sockaddr_in new_client = {0};
-    int curr_client_addr_len = 0;
-    int new_client_addr_len = 0;
-    int max_sd, sd, activity;
+    socklen_t curr_client_addr_len = sizeof(curr_client);
+    socklen_t new_client_addr_len = sizeof(new_client);
+    int max_sd, sd, activity, new_socket;
     int client_socket[SOMAXCONN];
+    char buffer[1024];
     for (int i = 0; i < SOMAXCONN; i++) { /// SOMAXCONN = max_clients
         client_socket[i] = 0;
     }
@@ -228,10 +229,25 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
+
+    int recvfrom_return_val = recvfrom(server_socket_listen_fd, buffer, MAX_SOCKET_MSG_SIZE, MSG_WAITALL,
+                                       (struct sockaddr *) &curr_client, &curr_client_addr_len);
+    if (recvfrom_return_val < 0) {
+        perror("TTFTP_ERROR");
+        exit(0);
+    }
+
+    /////////////////////////// good until here ////////////////////////////////////////////////////////////////////
+
+
+    return 0 ;
+
     /// listen on UDP PORT
     if (debug_flag) {
         printf("\nListening on port %d \n", port);
     }
+
+
     listen(server_socket_listen_fd, SOMAXCONN);
 
     // init the array of sockets - named master
@@ -276,7 +292,6 @@ int main(int argc, char **argv) {
 
         /// if something happend in the listening socket its an incoming connection
         if (FD_ISSET(server_socket_listen_fd, &master)) {
-            cout << "got new connection\n";
             /// if there is an ongoing sessions send the appropriate error message
             if (session_manager.is_active) {
                 if (debug_flag) {
@@ -290,6 +305,13 @@ int main(int argc, char **argv) {
                     cout << "starting a new session\n";
                 }
                 session_manager.is_active = true;
+
+                new_socket = accept(server_socket_listen_fd,
+                                    (struct sockaddr *) &curr_client, (socklen_t *) &curr_client_addr_len);
+                if (new_socket < 0) {
+                    perror("TTFTP_ERROR");
+                    exit(0);
+                }
 
                 //session_manager.current_session_socket_fd = client_socket[i];
                 // start a session
