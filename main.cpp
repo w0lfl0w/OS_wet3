@@ -9,13 +9,16 @@
 #include <list>
 #include <cmath>
 #include <sys/socket.h>
+#include <sys/select.h>
+#include <unistd.h>
+
 #include <sys/types.h>
 //#include <netinet.h>
 #include <netinet/in.h>
 #include <netdb.h>
 
 
-
+#define MAX_DATA_SIZE        512 // that size is in bytes
 #define MAX_SOCKET_MSG_SIZE 516 // that size is in bytes
 #define MAX_UNSIGNED_SHORT 65535
 
@@ -36,6 +39,117 @@ using std::stringstream;
 //    return;
 //}
 
+class ErrorMsg {
+    short opcode;
+    short error_code;
+    string error_message;
+    string string_terminator;
+
+    ErrorMsg() : opcode(-1), error_code(-1), error_message(""), string_terminator("\0") {}
+} __attribute__((packed));
+
+
+class WRQ {
+public:
+    int opcode;
+    string filename;
+    string trans_mode;
+
+    WRQ() {}
+
+    ~WRQ() {}
+}__attribute__((packed));
+
+
+class ACK {
+public:
+    int opcode;
+    int block_number;
+
+    ACK() {}
+
+    ~ACK() {}
+}__attribute__((packed));
+
+
+class Data {
+public:
+    int opcode;
+    int block_number;
+    char data[MAX_DATA_SIZE];
+
+    Data() {}
+
+    ~Data() {}
+}__attribute__((packed));
+
+
+bool file_exists(const std::string &name) {
+    if (FILE *file = fopen(name.c_str(), "r")) {
+        fclose(file);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+class SessionManager {
+public:
+
+    bool is_active;
+    int expected_block_num;
+    int resends_num;
+    struct sockaddr_in curr_client = {0};
+    int current_session_socket_fd;
+    string filename;
+    FILE *fp;
+
+
+    SessionManager() : is_active(false), expected_block_num(0), resends_num(0),
+                       fp(nullptr), current_session_socket_fd(-1) {
+        this->curr_client = {0};
+    }
+
+    ~SessionManager() {}
+
+    bool is_curr_client(/*sockaddr_in &addr,*/ int sock_fd) {
+        if (is_active) {
+            //return (addr.sin_addr.s_addr == this->curr_client.sin_addr.s_addr) &&
+            //       (addr.sin_port == this->curr_client.sin_port);
+            return this->current_session_socket_fd == sock_fd;
+        }
+
+        //this->curr_client = addr;
+        this->current_session_socket_fd = sock_fd;
+        return true;
+    }
+
+
+    void close_session(bool finished_nice) {
+        fclose(this->fp);
+        if (!finished_nice) {
+            unlink((this->filename).c_str());
+        }
+        this->reset_session();
+    }
+
+
+    void reset_session() {
+        this->is_active = false;
+        this->expected_block_num = 0;
+        this->resends_num = 0;
+        this->current_session_socket_fd = -1;
+//        if (this->fp.isopen())
+        return;
+    }
+
+    void handle_connection_request() {
+
+    }
+
+};
+
 
 /// single thread \ process implementation
 int main(int argc, char **argv) {
@@ -45,6 +159,7 @@ int main(int argc, char **argv) {
     unsigned int port = atoi(argv[1]);
     unsigned int timeout = atoi(argv[2]);
     unsigned int max_num_of_resends = atoi(argv[3]);
+    SessionManager session_manager;
 
     ////////////////////////////////////////// debuging ///////////////////////////////////////////////////////////////
     bool debug_flag = true;
@@ -71,41 +186,119 @@ int main(int argc, char **argv) {
 
     /// init the environment for the sockaddr struct
     struct sockaddr_in server_address = {0};
-
+    struct sockaddr_in curr_client = {0};
+    struct sockaddr_in new_client = {0};
+    int curr_client_addr_len = 0;
+    int new_client_addr_len = 0;
+    int max_sd, sd, activity;
+    int client_socket[SOMAXCONN];
+    for (int i = 0; i < SOMAXCONN; i++) { /// SOMAXCONN = max_clients
+        client_socket[i] = 0;
+    }
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
     server_address.sin_addr.s_addr = INADDR_ANY;
 
     /// assigns the address and port to the socket
-    int bind_return_value = bind(server_socket_listen_fd, (struct sockaddr *)&server_address, sizeof(server_address));
+    int bind_return_value = bind(server_socket_listen_fd, (struct sockaddr *) &server_address, sizeof(server_address));
+
 
     if (bind_return_value < 0) {
         perror("TTFTP_ERROR");
         exit(0);
     }
 
+    /// listen on UDP PORT
+    if (debug_flag) {
+        printf("\nListening on port %d \n", port);
+    }
+    listen(server_socket_listen_fd, SOMAXCONN);
+
+    // init the array of sockets - named master
+    fd_set master;
+    FD_ZERO(&master);
+    FD_SET(server_socket_listen_fd, &master);
+    if (debug_flag) {
+        printf("\nAdding listener to master \n");
+    }
 
     /// infinite run loop
     while (true) {
+        /// make the set ready - clear it and add the listening socket to it
+        FD_ZERO(&master);
+        FD_SET(server_socket_listen_fd, &master);
+        max_sd = server_socket_listen_fd;
 
-        /// listen on UDP PORT
-        listen(server_socket_listen_fd,5);
-        if(debug_flag){
-            printf("Listener on port %d \n", port);
+        /// add client sockets to set
+        for (int i = 0; i < SOMAXCONN; i++) {
+            //socket descriptor
+            sd = client_socket[i];
+
+            //if valid socket descriptor then add to read list
+            if (sd > 0)
+                FD_SET(sd, &master);
+
+            //highest file descriptor number, need it for the select function
+            max_sd = std::max(max_sd, sd);
         }
-        /// WRQ request received, send an ack packet
-        /// run function for handling incoming messages
 
-        /// wait for packet
+        //wait for an activity on one of the sockets
+        activity = select(max_sd + 1, &master, NULL, NULL, NULL);
 
-        /// send ack after each packet received
+        if ((activity < 0) && (errno != EINTR)) {
+            perror("TTFTP_ERROR");
+            exit(0);
+        }
 
-        /// end communication if got a data packet shorter than 516
+        for (int i = 0; i < SOMAXCONN; i++) {
+            if (FD_ISSET(client_socket[i], &master)) {
+                /// if something happend in the listening socket its an incoming connection
+                if (server_socket_listen_fd == client_socket[i]) {
+                    /// if there is an ongoing sessions send the appropriate error message
+                    if (session_manager.is_active) {
+                        // send error message
+                    }
+                        /// start a session with this one
+                    else {
+                        session_manager.is_active = true;
+                        session_manager.current_session_socket_fd = client_socket[i];
+                        // start a session
+                    }
+                }
+
+                    /// got something from client socket
+                else {
+                    for (int i = 0; i < SOMAXCONN; i++) {
+                        /// find the active client
+                        if (FD_ISSET(client_socket[i], &master)) {
+                            /// check if the current socket is the one we are talking with
+                            if (session_manager.is_curr_client(client_socket[i])) {
+
+                            }
+                                /// if it isnt, send the correct error
+                            else {
+
+                            }
+                        }
 
 
+                    }
+                }
+            }
+//         /// WRQ request received, send an ack packet
+//         /// run function for handling incoming messages
+
+//         /// wait for packet
+
+//         /// send ack after each packet received
+
+//         /// end communication if got a data packet shorter than 516
+
+
+        }
+
+
+        return 0;
     }
 
-
-    return 0;
 }
-
