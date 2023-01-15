@@ -31,13 +31,6 @@ using std::ifstream;
 using std::stringstream;
 
 
-//
-//void handle_packet(packet * pkt)
-//{
-//
-//
-//    return;
-//}
 
 class ErrorMsg {
     short opcode;
@@ -51,7 +44,7 @@ class ErrorMsg {
 
 class WRQ {
 public:
-    int opcode;
+    short opcode;
     string filename;
     string trans_mode;
 
@@ -63,8 +56,8 @@ public:
 
 class ACK {
 public:
-    int opcode;
-    int block_number;
+    short opcode;
+    short block_number;
 
     ACK() {}
 
@@ -74,8 +67,8 @@ public:
 
 class Data {
 public:
-    int opcode;
-    int block_number;
+    short opcode;
+    short block_number;
     char data[MAX_DATA_SIZE];
 
     Data() {}
@@ -94,11 +87,11 @@ bool file_exists(const std::string &name) {
 }
 
 
-class SessionManager {
+class SessionMannager {
 public:
 
     bool is_active;
-    int expected_block_num;
+    short expected_block_num;
     int resends_num;
     struct sockaddr_in curr_client = {0};
     int current_session_socket_fd;
@@ -106,35 +99,67 @@ public:
     FILE *fp;
 
 
-    SessionManager() : is_active(false), expected_block_num(0), resends_num(0),
-                       fp(nullptr), current_session_socket_fd(-1) {
+    SessionMannager() : is_active(false), expected_block_num(0), resends_num(0),
+                        fp(nullptr), current_session_socket_fd(-1)
+    {
         this->curr_client = {0};
     }
 
-    ~SessionManager() {}
+
+    SessionMannager(const sockaddr_in & new_client, int & new_socket_fd, string & filename)
+    {
+        this->is_active = false;
+        this->expected_block_num = 0;
+        this->resends_num = 0;
+        this->curr_client = new_client;
+        this->current_session_socket_fd = new_socket_fd;
+        this->filename = filename;
+        this->fp = fopen((this->filename).c_str(), "r");
+
+    }
+
+
+    SessionMannager(const SessionMannager& SM)
+    {
+        this->is_active = SM.is_active;
+        this->expected_block_num = SM.expected_block_num;
+        this->resends_num = SM.resends_num;
+        this->curr_client = SM.curr_client;
+        this->current_session_socket_fd = SM.current_session_socket_fd;
+        this->filename = SM.filename;
+        this->fp = fopen((this->filename).c_str(), "r");
+    }
+
+
+    ~SessionMannager() {}
 
     bool is_curr_client(/*sockaddr_in &addr,*/ int sock_fd) {
-        if (is_active) {
+        if (this->is_active) {
             //return (addr.sin_addr.s_addr == this->curr_client.sin_addr.s_addr) &&
             //       (addr.sin_port == this->curr_client.sin_port);
             return this->current_session_socket_fd == sock_fd;
         }
 
         //this->curr_client = addr;
-        this->current_session_socket_fd = sock_fd;
+        //this->current_session_socket_fd = sock_fd;
         return true;
     }
 
 
-    void close_session(bool finished_nice) {
-        if (nullptr != this->fp) {
+
+    void close_session(bool finished_nice)
+    {
+        if (nullptr != this->fp)
+        {
             fclose(this->fp);
             this->fp = nullptr;
         }
-        if (!finished_nice) {
+        if (!finished_nice)
+        {
             unlink((this->filename).c_str());
         }
         this->reset_session();
+        return;
     }
 
 
@@ -162,7 +187,7 @@ int main(int argc, char **argv) {
     unsigned int port = atoi(argv[1]);
     unsigned int timeout = atoi(argv[2]);
     unsigned int max_num_of_resends = atoi(argv[3]);
-    SessionManager session_manager;
+    SessionMannager session_manager;
 
     ////////////////////////////////////////// debuging ///////////////////////////////////////////////////////////////
     bool debug_flag = true;
@@ -256,6 +281,9 @@ int main(int argc, char **argv) {
         for (int i = 0; i < SOMAXCONN; i++) {
             ///found active socket
             if (FD_ISSET(client_socket[i], &master)) {
+                if (debug_flag){
+                    cout << "got new connection" << endl;
+                }
                 /// if something happend in the listening socket its an incoming connection
                 if (server_socket_listen_fd == client_socket[i]) {
                     /// if there is an ongoing sessions send the appropriate error message
@@ -298,9 +326,6 @@ int main(int argc, char **argv) {
 
 
         }
-
-
-        return 0;
     }
 
 }
