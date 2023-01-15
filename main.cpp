@@ -127,7 +127,10 @@ public:
 
 
     void close_session(bool finished_nice) {
-        fclose(this->fp);
+        if (nullptr != this->fp) {
+            fclose(this->fp);
+            this->fp = nullptr;
+        }
         if (!finished_nice) {
             unlink((this->filename).c_str());
         }
@@ -251,6 +254,7 @@ int main(int argc, char **argv) {
         }
 
         for (int i = 0; i < SOMAXCONN; i++) {
+            ///found active socket
             if (FD_ISSET(client_socket[i], &master)) {
                 /// if something happend in the listening socket its an incoming connection
                 if (server_socket_listen_fd == client_socket[i]) {
@@ -280,8 +284,6 @@ int main(int argc, char **argv) {
 
                             }
                         }
-
-
                     }
                 }
             }
