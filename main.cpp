@@ -27,6 +27,16 @@ using std::cerr;
 using std::ifstream;
 using std::stringstream;
 
+
+//
+//void handle_packet(packet * pkt)
+//{
+//
+//
+//    return;
+//}
+
+
 /// single thread \ process implementation
 int main(int argc, char **argv) {
     /// checkig for valid arguments - the command line is in the for of ./ttftps <port> <timeout> <max_num_of_resends>
@@ -37,6 +47,7 @@ int main(int argc, char **argv) {
     unsigned int max_num_of_resends = atoi(argv[3]);
 
     ////////////////////////////////////////// debuging ///////////////////////////////////////////////////////////////
+    bool debug_flag = true;
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     arguments_flag = (argc == 4) && (port <= MAX_UNSIGNED_SHORT) && (port >= 0) &&
                      (timeout <= MAX_UNSIGNED_SHORT) && (timeout >= 0) &&
@@ -47,16 +58,16 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
-    /// init a socket
-    int server_socket_fd = socket(AF_INET, SOCK_DGRAM, 0); /// SOCK_DGRAM = UDP
+    /// init a listening socket
+    int server_socket_listen_fd = socket(AF_INET, SOCK_DGRAM, 0); /// SOCK_DGRAM = UDP
 
-    if (server_socket_fd < 0) {
+    if (server_socket_listen_fd < 0) {
         perror("TTFTP_ERROR");
         exit(0);
     }
 
     /// optional stronger init to add after calling socket(), add if getting errors like “address already in use”
-    //int setsockopt(int server_socket_fd, int level, int optname,  const void *optval, socklen_t optlen);
+    //int setsockopt(int server_socket_listen_fd, int level, int optname,  const void *optval, socklen_t optlen);
 
     /// init the environment for the sockaddr struct
     struct sockaddr_in server_address = {0};
@@ -66,19 +77,24 @@ int main(int argc, char **argv) {
     server_address.sin_addr.s_addr = INADDR_ANY;
 
     /// assigns the address and port to the socket
-    int bind_return_value = bind(server_socket_fd, (struct sockaddr *)&server_address, sizeof(server_address));
+    int bind_return_value = bind(server_socket_listen_fd, (struct sockaddr *)&server_address, sizeof(server_address));
 
     if (bind_return_value < 0) {
         perror("TTFTP_ERROR");
         exit(0);
     }
 
+
     /// infinite run loop
     while (true) {
 
         /// listen on UDP PORT
-        listen(server_socket_fd,5);
+        listen(server_socket_listen_fd,5);
+        if(debug_flag){
+            printf("Listener on port %d \n", port);
+        }
         /// WRQ request received, send an ack packet
+        /// run function for handling incoming messages
 
         /// wait for packet
 
