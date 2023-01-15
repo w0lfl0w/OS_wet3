@@ -31,7 +31,6 @@ using std::ifstream;
 using std::stringstream;
 
 
-
 class ErrorMsg {
     short opcode;
     short error_code;
@@ -100,14 +99,12 @@ public:
 
 
     SessionMannager() : is_active(false), expected_block_num(0), resends_num(0),
-                        fp(nullptr), current_session_socket_fd(-1)
-    {
+                        fp(nullptr), current_session_socket_fd(-1) {
         this->curr_client = {0};
     }
 
 
-    SessionMannager(const sockaddr_in & new_client, int & new_socket_fd, string & filename)
-    {
+    SessionMannager(const sockaddr_in &new_client, int &new_socket_fd, string &filename) {
         this->is_active = false;
         this->expected_block_num = 0;
         this->resends_num = 0;
@@ -119,8 +116,7 @@ public:
     }
 
 
-    SessionMannager(const SessionMannager& SM)
-    {
+    SessionMannager(const SessionMannager &SM) {
         this->is_active = SM.is_active;
         this->expected_block_num = SM.expected_block_num;
         this->resends_num = SM.resends_num;
@@ -146,16 +142,12 @@ public:
     }
 
 
-
-    void close_session(bool finished_nice)
-    {
-        if (nullptr != this->fp)
-        {
+    void close_session(bool finished_nice) {
+        if (nullptr != this->fp) {
             fclose(this->fp);
             this->fp = nullptr;
         }
-        if (!finished_nice)
-        {
+        if (!finished_nice) {
             unlink((this->filename).c_str());
         }
         this->reset_session();
@@ -278,10 +270,37 @@ int main(int argc, char **argv) {
             exit(0);
         }
 
+//        if (activity) {
+//            cout << "got activity\n";
+//        }
+
+        /// if something happend in the listening socket its an incoming connection
+        if (FD_ISSET(server_socket_listen_fd, &master)) {
+            cout << "got new connection\n";
+            /// if there is an ongoing sessions send the appropriate error message
+            if (session_manager.is_active) {
+                if (debug_flag) {
+                    cout << "got a new connection but we already have a session\n";
+                }
+                // send error message
+            }
+                /// start a session with this one
+            else {
+                if (debug_flag) {
+                    cout << "starting a new session\n";
+                }
+                session_manager.is_active = true;
+
+                //session_manager.current_session_socket_fd = client_socket[i];
+                // start a session
+            }
+        }
+
+
         for (int i = 0; i < SOMAXCONN; i++) {
             ///found active socket
             if (FD_ISSET(client_socket[i], &master)) {
-                if (debug_flag){
+                if (debug_flag) {
                     cout << "got new connection" << endl;
                 }
                 /// if something happend in the listening socket its an incoming connection
@@ -300,21 +319,20 @@ int main(int argc, char **argv) {
 
                     /// got something from client socket
                 else {
-                    for (int i = 0; i < SOMAXCONN; i++) {
-                        /// find the active client
-                        if (FD_ISSET(client_socket[i], &master)) {
-                            /// check if the current socket is the one we are talking with
-                            if (session_manager.is_curr_client(client_socket[i])) {
+                    /// find the active client
+                    if (FD_ISSET(client_socket[i], &master)) {
+                        /// check if the current socket is the one we are talking with
+                        if (session_manager.is_curr_client(client_socket[i])) {
 
-                            }
-                                /// if it isnt, send the correct error
-                            else {
+                        }
+                            /// if it isnt, send the correct error
+                        else {
 
-                            }
                         }
                     }
                 }
             }
+        }
 //         /// WRQ request received, send an ack packet
 //         /// run function for handling incoming messages
 
@@ -325,7 +343,8 @@ int main(int argc, char **argv) {
 //         /// end communication if got a data packet shorter than 516
 
 
-        }
     }
+
+    return 0;
 
 }
