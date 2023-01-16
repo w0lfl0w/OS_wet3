@@ -230,6 +230,33 @@ int main(int argc, char **argv) {
     }
 
     cout << "got till here" << endl;
+    // TODO: put this in while
+    if (session_manager.is_active) // a current client exists
+    {
+        // use select with timeout
+        // if received packet
+            // if op != DATA_OP send error and kill session
+            // if block num doenst match send error and kill session
+            // check if
+        // if reached timeout (didnt receive packet in time)
+            // if didnt pass max resend
+                // resend ACK
+                // ++ resend counter
+            // if passed send error and kill session
+    }
+    else // no current client
+    {
+        // use select with no timeout
+        // when select returns:
+        // call recvfrom
+        // if packet.op == WRQ
+            // if file already exist send error (use try_open_new)
+            // else - start session
+                // open file, use try_open_new
+                // if
+        // if not send illegel command
+    }
+
 
     /// infinite working loop
     while (1) {
@@ -239,6 +266,8 @@ int main(int argc, char **argv) {
             perror("TTFTP_ERROR");
             exit(0);
         }
+
+
 
         buffer[recvfrom_return_val] = '/0';
 
@@ -272,7 +301,7 @@ int main(int argc, char **argv) {
     /////////////////////////// good until here ////////////////////////////////////////////////////////////////////
 
 
-    return 0;
+    return 0 ;
 
     /// listen on UDP PORT
     if (debug_flag) {
