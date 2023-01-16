@@ -78,13 +78,33 @@ public:
 
 bool file_exists(const std::string &name) {
     if (FILE *file = fopen(name.c_str(), "r")) {
+        // TODO: call perror!
+
         fclose(file);
+        // TODO: call perror!
+
         return true;
-    } else {
+    } 
+    else 
+    {
         return false;
     }
 }
 
+
+FILE* try_open_new(const std::string& name) {
+    FILE* file = NULL;
+    if (file_exists(name)) 
+    {
+        return NULL;
+    }
+    else 
+    {
+        file = fopen(name.c_str(), "w");
+        // TODO: call perror!
+        return file;
+    }
+}
 
 class SessionMannager {
 public:
@@ -127,7 +147,10 @@ public:
     }
 
 
-    ~SessionMannager() {}
+    ~SessionMannager() 
+    {
+        this->close_session(true);
+    }
 
     bool is_curr_client(/*sockaddr_in &addr,*/ int sock_fd) {
         if (this->is_active) {
@@ -229,6 +252,33 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
+    // TODO: put this in while
+    if (session_manager.is_active) // a current client exists
+    {
+        // use select with timeout
+        // if received packet
+            // if op != DATA_OP send error and kill session
+            // if block num doenst match send error and kill session
+            // check if 
+        // if reached timeout (didnt receive packet in time)
+            // if didnt pass max resend
+                // resend ACK
+                // ++ resend counter
+            // if passed send error and kill session
+    }
+    else // no current client
+    {
+        // use select with no timeout
+        // when select returns:
+        // call recvfrom
+        // if packet.op == WRQ 
+            // if file already exist send error (use try_open_new)
+            // else - start session
+                // open file, use try_open_new
+                // if 
+        // if not send illegel command
+    }
+
 
     int recvfrom_return_val = recvfrom(server_socket_listen_fd, buffer, MAX_SOCKET_MSG_SIZE, MSG_WAITALL,
                                        (struct sockaddr *) &curr_client, &curr_client_addr_len);
@@ -236,6 +286,8 @@ int main(int argc, char **argv) {
         perror("TTFTP_ERROR");
         exit(0);
     }
+
+    
 
     /////////////////////////// good until here ////////////////////////////////////////////////////////////////////
 
