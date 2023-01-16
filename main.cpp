@@ -35,9 +35,10 @@
 #define MSG_BADBLOCK        "Bad block number"
 #define MSG_TIMEOUT         "Abandoning file transmission"
 
-#define OPCODE_WRQ			2
-#define OPCODE_ACK			4
-#define OPCODE_DATA			3
+#define OPCODE_WRQ          2
+#define OPCODE_ACK          4
+#define OPCODE_DATA         3
+#define OPCODE_ERROR        5
 
 using std::FILE;
 using std::string;
@@ -49,12 +50,32 @@ using std::stringstream;
 
 
 class ErrorMsg {
+public:
     short opcode;
     short error_code;
-    string error_message;
-    string string_terminator;
+    char error_message[MAX_DATA_SIZE];
+    //string_terminator;
 
-    ErrorMsg() : opcode(-1), error_code(-1), error_message(""), string_terminator("\0") {}
+    ErrorMsg() : opcode(-1), error_code(-1)/*, string_terminator("\0")*/
+    {
+        memset(this->error_message, '\0', MAX_DATA_SIZE);
+    }
+
+    ErrorMsg(short opcode, short error_code, string error_message) : opcode(opcode), error_code(error_code)/*,
+                                                                     error_message(""), string_terminator("\0")*/ {
+        memset(this->error_message, '\0', MAX_DATA_SIZE);
+        strcpy(this->error_message, error_message.c_str());
+    }
+
+
+    ErrorMsg(const ErrorMsg& orig)
+    {
+        this->opcode = orig.opcode;
+        this->error_code = orig.error_code;
+        strcpy(this->error_message, orig.error_message);
+    }
+
+
 } __attribute__((packed));
 
 
@@ -65,6 +86,12 @@ public:
     string trans_mode;
 
     WRQ() {}
+
+    WRQ(char buff[], int buff_size) {
+        this->opcode = OPCODE_WRQ;
+        this->filename = (char *) &buff[2];
+        this->trans_mode = (char *) &buff[3 + strlen((char *) &buff[2])];
+    }
 
     ~WRQ() {}
 }__attribute__((packed));
@@ -77,6 +104,11 @@ public:
 
     ACK() {}
 
+    ACK(short block_num) {
+        this->opcode = OPCODE_ACK;
+        this->block_number = block_num;
+    }
+
     ~ACK() {}
 }__attribute__((packed));
 
@@ -85,9 +117,23 @@ class Data {
 public:
     short opcode;
     short block_number;
-    char data[MAX_DATA_SIZE];
+    char data[MAX_DATA_SIZE + 1];
 
     Data() {}
+
+    Data(short block_num, char *data_in, int buff_size) {
+        this->opcode = OPCODE_DATA;
+        this->block_number = block_num;
+        strncpy(this->data, data_in, buff_size - 4);
+        this->data[MAX_DATA_SIZE] = '\0';
+    }
+
+    Data(char buff[], int buff_size) {
+        this->opcode = OPCODE_DATA;
+        this->block_number = (short) buff[2] << sizeof(char) | (short) buff[3];
+        strncpy(this->data, &buff[4], buff_size - 4);
+        this->data[MAX_DATA_SIZE] = '\0';
+    }
 
     ~Data() {}
 }__attribute__((packed));
@@ -181,6 +227,18 @@ public:
         return;
     }
 
+    FILE *try_open_new(const std::string &name) {
+        FILE *file = NULL;
+        if (file_exists(name)) {
+            return nullptr;
+        } else {
+            file = fopen(name.c_str(), "w");
+            this->filename = name;
+            this->fp = file;
+            return file;
+        }
+    }
+
     void handle_connection_request() {
 
     }
@@ -197,7 +255,7 @@ int main(int argc, char **argv) {
     unsigned int timeout = atoi(argv[2]);
     unsigned int max_num_of_resends = atoi(argv[3]);
     SessionMannager session_manager;
-    short   curr_op = 0;
+    short curr_op = 0;
 
     ////////////////////////////////////////// debuging ///////////////////////////////////////////////////////////////
     bool debug_flag = true;
@@ -231,6 +289,7 @@ int main(int argc, char **argv) {
     int max_sd, sd, activity, new_socket;
     int client_socket[SOMAXCONN];
     char buffer[1024];
+    ErrorMsg current_error;
     for (int i = 0; i < SOMAXCONN; i++) { /// SOMAXCONN = max_clients
         client_socket[i] = 0;
     }
@@ -248,23 +307,6 @@ int main(int argc, char **argv) {
     }
 
     cout << "got till here" << endl;
-    // TODO: put this in while
-    if (session_manager.is_active) // a current client exists
-    {
-
-    } else // no current client
-    {
-        // use select with no timeout
-        // when select returns:
-        // call recvfrom
-        // if packet.op == WRQ
-        // if file already exist send error (use try_open_new)
-        // else - start session
-        // open file, use try_open_new
-        // if
-        // if not send illegel command
-    }
-
 
     // init the array of sockets - named master
     fd_set master;
@@ -296,6 +338,8 @@ int main(int argc, char **argv) {
             //wait for an activity on one of the sockets
             //activity = select(max_sd + 1, &master, NULL, NULL, NULL);
 
+
+
             int recvfrom_return_val = recvfrom(server_socket_listen_fd, buffer, MAX_SOCKET_MSG_SIZE, MSG_WAITALL,
                                                (struct sockaddr *) &curr_client, &curr_client_addr_len);
             if (recvfrom_return_val < 0) {
@@ -303,7 +347,7 @@ int main(int argc, char **argv) {
                 exit(0);
             }
 
-            curr_op = (short)buffer[0] << sizeof(char) | (short)buffer[1];
+            curr_op = (short) buffer[0] << sizeof(char) | (short) buffer[1];
 
             buffer[recvfrom_return_val] = '/0';
 
@@ -313,20 +357,41 @@ int main(int argc, char **argv) {
                 cout << "recvfrom_return_val: " << recvfrom_return_val << endl;
                 cout << "buffer: " << buffer << endl;
                 cout << "op: " << curr_op << endl;
-                cout << "file name: " << (char*)&buffer[2] << endl;
-                cout << "transmission mode: " << (char*)&buffer[2+strlen((char*)&buffer[2])] << endl;
-
+                cout << "file name: " << (char *) &buffer[2] << endl;
+                cout << "transmission mode: " << (char *) &buffer[3 + strlen((char *) &buffer[2])] << endl;
             }
             // got packet, check if its a WRQ PACKET
-            if (curr_op != OPCODE_WRQ){
+            if (curr_op != OPCODE_WRQ) {
                 cout << "got a non WRQ, send error\n";
-            }
+                // send to
+            } else {
+                // if file already exist send error (use try_open_new)
+                FILE *try_open_new_return_value = session_manager.try_open_new((char *) &buffer[2]);
+                if (nullptr == try_open_new_return_value) {
+                    // failed to create new file because it already exists
+                    cout << "file already exists\n";
+                    current_error.error_code = ERRCODE_FILEEXISTS;
+                    //current_error.error_message.assign(MSG_FILEEXISTS);
+                    //sendto
+                    //                   short opcode;
+                    // short error_code;
+                    // string error_message;
+                    // string string_terminator;
 
+                } else {
+                    cout << "file doesnt exists yet, open it and start a session.\n";
+
+                }
+            }
+            // else - start session
+            // open file, use try_open_new
+            // if
+            // if not send illegel command
         }
 
     }
 
-    return 0 ;
+    return 0;
 }
 
 /////////////////////////// good until here ////////////////////////////////////////////////////////////////////
