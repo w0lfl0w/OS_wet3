@@ -72,6 +72,7 @@ public:
     {
         this->opcode = orig.opcode;
         this->error_code = orig.error_code;
+        memset(this->error_message, '\0', MAX_DATA_SIZE);
         strcpy(this->error_message, orig.error_message);
     }
 
@@ -290,6 +291,7 @@ int main(int argc, char **argv) {
     int client_socket[SOMAXCONN];
     char buffer[1024];
     ErrorMsg current_error;
+    ACK ack_msg;
     for (int i = 0; i < SOMAXCONN; i++) { /// SOMAXCONN = max_clients
         client_socket[i] = 0;
     }
@@ -352,7 +354,7 @@ int main(int argc, char **argv) {
             buffer[recvfrom_return_val] = '/0';
 
             if (debug_flag) {
-                cout << "curr_client.sin_addr: " << (sockaddr *) &curr_client.sin_addr << endl;
+                cout << "curr_client.sin_addr: " << curr_client.sin_addr.s_addr << endl;
                 //<< endl;//<< (curr_client.sin_addr) << endl;
                 cout << "recvfrom_return_val: " << recvfrom_return_val << endl;
                 cout << "buffer: " << buffer << endl;
@@ -370,16 +372,29 @@ int main(int argc, char **argv) {
                 if (nullptr == try_open_new_return_value) {
                     // failed to create new file because it already exists
                     cout << "file already exists\n";
-                    current_error.error_code = ERRCODE_FILEEXISTS;
+                    //current_error.error_code = ERRCODE_FILEEXISTS;
                     //current_error.error_message.assign(MSG_FILEEXISTS);
+                    current_error = ErrorMsg(OPCODE_ERROR, ERRCODE_FILEEXISTS, MSG_FILEEXISTS);
+                    curr_client_addr_len = sizeof(curr_client);
+                    int bytes_sent = sendto(server_socket_listen_fd, &current_error, 4 + strlen(current_error.error_message) + 1, 0,
+                                           (sockaddr *) &curr_client, curr_client_addr_len);
+                    if (debug_flag)
+                    {
+                        cout << "bytes sent: " << bytes_sent << endl;
+                    }
                     //sendto
-                    //                   short opcode;
+                    //    short opcode;
                     // short error_code;
                     // string error_message;
                     // string string_terminator;
 
                 } else {
                     cout << "file doesnt exists yet, open it and start a session.\n";
+                    session_manager.is_active = true;
+                    ack_msg.block_number = session_manager.expected_block_num;
+                    ack_msg.opcode = OPCODE_ACK;
+                    curr_client_addr_len = sizeof(curr_client);
+                    sendto(server_socket_listen_fd, &ack_msg, 4, 0, (sockaddr *) &curr_client, curr_client_addr_len);
 
                 }
             }
@@ -518,4 +533,4 @@ int main(int argc, char **argv) {
 
 // return 0;
 
-//}
+//}//
