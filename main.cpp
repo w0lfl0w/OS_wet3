@@ -12,15 +12,18 @@
 #include <sys/select.h>
 #include <unistd.h>
 
+
 #include <sys/types.h>
 //#include <netinet.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <cstring>
 
 
 #define MAX_DATA_SIZE       512 // that size is in bytes
 #define MAX_SOCKET_MSG_SIZE 516 // that size is in bytes
 #define MAX_UNSIGNED_SHORT 65535
+
 #define ERRCODE_UNKNOWN     7
 #define ERRCODE_FILEEXISTS  6
 #define ERRCODE_UNEXPECTED  4
@@ -31,6 +34,10 @@
 #define MSG_UNEXPECTED      "Unexpected packet"
 #define MSG_BADBLOCK        "Bad block number"
 #define MSG_TIMEOUT         "Abandoning file transmission"
+
+#define OPCODE_WRQ			2
+#define OPCODE_ACK			4
+#define OPCODE_DATA			3
 
 using std::FILE;
 using std::string;
@@ -190,6 +197,7 @@ int main(int argc, char **argv) {
     unsigned int timeout = atoi(argv[2]);
     unsigned int max_num_of_resends = atoi(argv[3]);
     SessionMannager session_manager;
+    short   curr_op = 0;
 
     ////////////////////////////////////////// debuging ///////////////////////////////////////////////////////////////
     bool debug_flag = true;
@@ -280,11 +288,13 @@ int main(int argc, char **argv) {
             // if didnt pass max resend
             // resend ACK
             // ++ resend counter
-            // if passed send error and kill session        }
+            // if passed max resend, send error and kill session
         }
             /// waiting for a session to start
         else {
             cout << "no session\n";
+            //wait for an activity on one of the sockets
+            //activity = select(max_sd + 1, &master, NULL, NULL, NULL);
 
             int recvfrom_return_val = recvfrom(server_socket_listen_fd, buffer, MAX_SOCKET_MSG_SIZE, MSG_WAITALL,
                                                (struct sockaddr *) &curr_client, &curr_client_addr_len);
@@ -293,6 +303,8 @@ int main(int argc, char **argv) {
                 exit(0);
             }
 
+            curr_op = (short)buffer[0] << sizeof(char) | (short)buffer[1];
+
             buffer[recvfrom_return_val] = '/0';
 
             if (debug_flag) {
@@ -300,7 +312,16 @@ int main(int argc, char **argv) {
                 //<< endl;//<< (curr_client.sin_addr) << endl;
                 cout << "recvfrom_return_val: " << recvfrom_return_val << endl;
                 cout << "buffer: " << buffer << endl;
+                cout << "op: " << curr_op << endl;
+                cout << "file name: " << (char*)&buffer[2] << endl;
+                cout << "transmission mode: " << (char*)&buffer[2+strlen((char*)&buffer[2])] << endl;
+
             }
+            // got packet, check if its a WRQ PACKET
+            if (curr_op != OPCODE_WRQ){
+                cout << "got a non WRQ, send error\n";
+            }
+
         }
 
     }
