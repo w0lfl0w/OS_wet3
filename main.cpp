@@ -229,18 +229,50 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
+    cout << "got till here" << endl;
 
-    int recvfrom_return_val = recvfrom(server_socket_listen_fd, buffer, MAX_SOCKET_MSG_SIZE, MSG_WAITALL,
-                                       (struct sockaddr *) &curr_client, &curr_client_addr_len);
-    if (recvfrom_return_val < 0) {
-        perror("TTFTP_ERROR");
-        exit(0);
+    /// infinite working loop
+    while (1) {
+        int recvfrom_return_val = recvfrom(server_socket_listen_fd, buffer, MAX_SOCKET_MSG_SIZE, MSG_WAITALL,
+                                           (struct sockaddr *) &curr_client, &curr_client_addr_len);
+        if (recvfrom_return_val < 0) {
+            perror("TTFTP_ERROR");
+            exit(0);
+        }
+
+        buffer[recvfrom_return_val] = '/0';
+
+        if (debug_flag) {
+            cout << "curr_client.sin_addr: " << (sockaddr *) &curr_client.sin_addr << endl;
+                 //<< endl;//<< (curr_client.sin_addr) << endl;
+            cout << "recvfrom_return_val: " << recvfrom_return_val << endl;
+            cout << "buffer: " << buffer << endl;
+        }
+
+        /// no live session
+        if (!session_manager.is_active){
+            if(debug_flag) cout << "starting a new session" << endl ;
+            session_manager.is_active = true;
+        }
+
+        /// already have a live session
+        else {
+            /// if it is from current client that we have a session with
+            //if(){
+            //
+            //}
+
+            /// if it is from a different client, that we aren't having a session with
+
+        }
+
+
+
     }
-
     /////////////////////////// good until here ////////////////////////////////////////////////////////////////////
 
 
-    return 0 ;
+    return 0;
 
     /// listen on UDP PORT
     if (debug_flag) {
