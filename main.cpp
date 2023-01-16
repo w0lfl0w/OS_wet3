@@ -61,7 +61,7 @@ public:
         memset(this->error_message, '\0', MAX_DATA_SIZE);
     }
 
-    ErrorMsg(short opcode, short error_code, string error_message) : opcode(opcode), error_code(error_code)/*,
+    ErrorMsg(short opcode, short error_code, string error_message) : opcode(htons(opcode)), error_code(htons(error_code))/*,
                                                                      error_message(""), string_terminator("\0")*/ {
         memset(this->error_message, '\0', MAX_DATA_SIZE);
         strcpy(this->error_message, error_message.c_str());
@@ -106,8 +106,8 @@ public:
     ACK() {}
 
     ACK(short block_num) {
-        this->opcode = OPCODE_ACK;
-        this->block_number = block_num;
+        this->opcode = htons(OPCODE_ACK);
+        this->block_number = htons(block_num);
     }
 
     ~ACK() {}
@@ -377,7 +377,7 @@ int main(int argc, char **argv) {
                     current_error = ErrorMsg(OPCODE_ERROR, ERRCODE_FILEEXISTS, MSG_FILEEXISTS);
                     curr_client_addr_len = sizeof(curr_client);
                     int bytes_sent = sendto(server_socket_listen_fd, &current_error, 4 + strlen(current_error.error_message) + 1, 0,
-                                           (sockaddr *) &curr_client, curr_client_addr_len);
+                                            (sockaddr *) &curr_client, curr_client_addr_len);
                     if (debug_flag)
                     {
                         cout << "bytes sent: " << bytes_sent << endl;
