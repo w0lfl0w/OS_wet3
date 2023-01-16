@@ -18,9 +18,19 @@
 #include <netdb.h>
 
 
-#define MAX_DATA_SIZE        512 // that size is in bytes
+#define MAX_DATA_SIZE       512 // that size is in bytes
 #define MAX_SOCKET_MSG_SIZE 516 // that size is in bytes
 #define MAX_UNSIGNED_SHORT 65535
+#define ERRCODE_UNKNOWN     7
+#define ERRCODE_FILEEXISTS  6
+#define ERRCODE_UNEXPECTED  4
+#define ERRCODE_BADBLOCK    0
+#define ERRCODE_TIMEOUT     0
+#define MSG_UNKNOWN         "Unknown user"
+#define MSG_FILEEXISTS      "File already exists"
+#define MSG_UNEXPECTED      "Unexpected packet"
+#define MSG_BADBLOCK        "Bad block number"
+#define MSG_TIMEOUT         "Abandoning file transmission"
 
 using std::FILE;
 using std::string;
@@ -233,83 +243,20 @@ int main(int argc, char **argv) {
     // TODO: put this in while
     if (session_manager.is_active) // a current client exists
     {
-        // use select with timeout
-        // if received packet
-            // if op != DATA_OP send error and kill session
-            // if block num doenst match send error and kill session
-            // check if
-        // if reached timeout (didnt receive packet in time)
-            // if didnt pass max resend
-                // resend ACK
-                // ++ resend counter
-            // if passed send error and kill session
-    }
-    else // no current client
+
+    } else // no current client
     {
         // use select with no timeout
         // when select returns:
         // call recvfrom
         // if packet.op == WRQ
-            // if file already exist send error (use try_open_new)
-            // else - start session
-                // open file, use try_open_new
-                // if
+        // if file already exist send error (use try_open_new)
+        // else - start session
+        // open file, use try_open_new
+        // if
         // if not send illegel command
     }
 
-
-    /// infinite working loop
-    while (1) {
-        int recvfrom_return_val = recvfrom(server_socket_listen_fd, buffer, MAX_SOCKET_MSG_SIZE, MSG_WAITALL,
-                                           (struct sockaddr *) &curr_client, &curr_client_addr_len);
-        if (recvfrom_return_val < 0) {
-            perror("TTFTP_ERROR");
-            exit(0);
-        }
-
-
-
-        buffer[recvfrom_return_val] = '/0';
-
-        if (debug_flag) {
-            cout << "curr_client.sin_addr: " << (sockaddr *) &curr_client.sin_addr << endl;
-                 //<< endl;//<< (curr_client.sin_addr) << endl;
-            cout << "recvfrom_return_val: " << recvfrom_return_val << endl;
-            cout << "buffer: " << buffer << endl;
-        }
-
-        /// no live session
-        if (!session_manager.is_active){
-            if(debug_flag) cout << "starting a new session" << endl ;
-            session_manager.is_active = true;
-        }
-
-        /// already have a live session
-        else {
-            /// if it is from current client that we have a session with
-            //if(){
-            //
-            //}
-
-            /// if it is from a different client, that we aren't having a session with
-
-        }
-
-
-
-    }
-    /////////////////////////// good until here ////////////////////////////////////////////////////////////////////
-
-
-    return 0 ;
-
-    /// listen on UDP PORT
-    if (debug_flag) {
-        printf("\nListening on port %d \n", port);
-    }
-
-
-    listen(server_socket_listen_fd, SOMAXCONN);
 
     // init the array of sockets - named master
     fd_set master;
@@ -319,103 +266,158 @@ int main(int argc, char **argv) {
         printf("\nAdding listener to master \n");
     }
 
-    /// infinite run loop
-    while (true) {
-        /// make the set ready - clear it and add the listening socket to it
-        FD_ZERO(&master);
-        FD_SET(server_socket_listen_fd, &master);
-        max_sd = server_socket_listen_fd;
+    /// infinite working loop
+    while (1) {
+        /// there is a live session
+        if (session_manager.is_active) {
+            cout << "active session\n";
+            // use select with timeout
+            // if received packet
+            // if op != DATA_OP send error and kill session
+            // if block num doenst match send error and kill session
+            // check if
+            // if reached timeout (didnt receive packet in time)
+            // if didnt pass max resend
+            // resend ACK
+            // ++ resend counter
+            // if passed send error and kill session        }
+        }
+            /// waiting for a session to start
+        else {
+            cout << "no session\n";
 
-        /// add client sockets to set
-        for (int i = 0; i < SOMAXCONN; i++) {
-            //socket descriptor
-            sd = client_socket[i];
+            int recvfrom_return_val = recvfrom(server_socket_listen_fd, buffer, MAX_SOCKET_MSG_SIZE, MSG_WAITALL,
+                                               (struct sockaddr *) &curr_client, &curr_client_addr_len);
+            if (recvfrom_return_val < 0) {
+                perror("TTFTP_ERROR");
+                exit(0);
+            }
 
-            //if valid socket descriptor then add to read list
-            if (sd > 0)
-                FD_SET(sd, &master);
+            buffer[recvfrom_return_val] = '/0';
 
-            //highest file descriptor number, need it for the select function
-            max_sd = std::max(max_sd, sd);
+            if (debug_flag) {
+                cout << "curr_client.sin_addr: " << (sockaddr *) &curr_client.sin_addr << endl;
+                //<< endl;//<< (curr_client.sin_addr) << endl;
+                cout << "recvfrom_return_val: " << recvfrom_return_val << endl;
+                cout << "buffer: " << buffer << endl;
+            }
         }
 
-        //wait for an activity on one of the sockets
-        activity = select(max_sd + 1, &master, NULL, NULL, NULL);
+    }
 
-        if ((activity < 0) && (errno != EINTR)) {
-            perror("TTFTP_ERROR");
-            exit(0);
-        }
+    return 0 ;
+}
 
-//        if (activity) {
-//            cout << "got activity\n";
+/////////////////////////// good until here ////////////////////////////////////////////////////////////////////
+
+
+
+
+// init the array of sockets - named master
+//    fd_set master;
+//    FD_ZERO(&master);
+//    FD_SET(server_socket_listen_fd, &master);
+//    if (debug_flag) {
+//        printf("\nAdding listener to master \n");
+//    }
+
+//    /// infinite run loop
+//    while (true) {
+//        /// make the set ready - clear it and add the listening socket to it
+//        FD_ZERO(&master);
+//        FD_SET(server_socket_listen_fd, &master);
+//        max_sd = server_socket_listen_fd;
+//
+//        /// add client sockets to set
+//        for (int i = 0; i < SOMAXCONN; i++) {
+//            //socket descriptor
+//            sd = client_socket[i];
+//
+//            //if valid socket descriptor then add to read list
+//            if (sd > 0)
+//                FD_SET(sd, &master);
+//
+//            //highest file descriptor number, need it for the select function
+//            max_sd = std::max(max_sd, sd);
 //        }
-
-        /// if something happend in the listening socket its an incoming connection
-        if (FD_ISSET(server_socket_listen_fd, &master)) {
-            /// if there is an ongoing sessions send the appropriate error message
-            if (session_manager.is_active) {
-                if (debug_flag) {
-                    cout << "got a new connection but we already have a session\n";
-                }
-                // send error message
-            }
-                /// start a session with this one
-            else {
-                if (debug_flag) {
-                    cout << "starting a new session\n";
-                }
-                session_manager.is_active = true;
-
-                new_socket = accept(server_socket_listen_fd,
-                                    (struct sockaddr *) &curr_client, (socklen_t *) &curr_client_addr_len);
-                if (new_socket < 0) {
-                    perror("TTFTP_ERROR");
-                    exit(0);
-                }
-
-                //session_manager.current_session_socket_fd = client_socket[i];
-                // start a session
-            }
-        }
-
-
-        for (int i = 0; i < SOMAXCONN; i++) {
-            ///found active socket
-            if (FD_ISSET(client_socket[i], &master)) {
-                if (debug_flag) {
-                    cout << "got new connection" << endl;
-                }
-                /// if something happend in the listening socket its an incoming connection
-                if (server_socket_listen_fd == client_socket[i]) {
-                    /// if there is an ongoing sessions send the appropriate error message
-                    if (session_manager.is_active) {
-                        // send error message
-                    }
-                        /// start a session with this one
-                    else {
-                        session_manager.is_active = true;
-                        session_manager.current_session_socket_fd = client_socket[i];
-                        // start a session
-                    }
-                }
-
-                    /// got something from client socket
-                else {
-                    /// find the active client
-                    if (FD_ISSET(client_socket[i], &master)) {
-                        /// check if the current socket is the one we are talking with
-                        if (session_manager.is_curr_client(client_socket[i])) {
-
-                        }
-                            /// if it isnt, send the correct error
-                        else {
-
-                        }
-                    }
-                }
-            }
-        }
+//
+//        //wait for an activity on one of the sockets
+//        activity = select(max_sd + 1, &master, NULL, NULL, NULL);
+//
+//        if ((activity < 0) && (errno != EINTR)) {
+//            perror("TTFTP_ERROR");
+//            exit(0);
+//        }
+//
+////        if (activity) {
+////            cout << "got activity\n";
+////        }
+//
+//        /// if something happend in the listening socket its an incoming connection
+//        if (FD_ISSET(server_socket_listen_fd, &master)) {
+//            /// if there is an ongoing sessions send the appropriate error message
+//            if (session_manager.is_active) {
+//                if (debug_flag) {
+//                    cout << "got a new connection but we already have a session\n";
+//                }
+//                // send error message
+//            }
+//                /// start a session with this one
+//            else {
+//                if (debug_flag) {
+//                    cout << "starting a new session\n";
+//                }
+//                session_manager.is_active = true;
+//
+//                new_socket = accept(server_socket_listen_fd,
+//                                    (struct sockaddr *) &curr_client, (socklen_t *) &curr_client_addr_len);
+//                if (new_socket < 0) {
+//                    perror("TTFTP_ERROR");
+//                    exit(0);
+//                }
+//
+//                //session_manager.current_session_socket_fd = client_socket[i];
+//                // start a session
+//            }
+//        }
+//
+//
+//        for (int i = 0; i < SOMAXCONN; i++) {
+//            ///found active socket
+//            if (FD_ISSET(client_socket[i], &master)) {
+//                if (debug_flag) {
+//                    cout << "got new connection" << endl;
+//                }
+//                /// if something happend in the listening socket its an incoming connection
+//                if (server_socket_listen_fd == client_socket[i]) {
+//                    /// if there is an ongoing sessions send the appropriate error message
+//                    if (session_manager.is_active) {
+//                        // send error message
+//                    }
+//                        /// start a session with this one
+//                    else {
+//                        session_manager.is_active = true;
+//                        session_manager.current_session_socket_fd = client_socket[i];
+//                        // start a session
+//                    }
+//                }
+//
+//                    /// got something from client socket
+//                else {
+//                    /// find the active client
+//                    if (FD_ISSET(client_socket[i], &master)) {
+//                        /// check if the current socket is the one we are talking with
+//                        if (session_manager.is_curr_client(client_socket[i])) {
+//
+//                        }
+//                            /// if it isnt, send the correct error
+//                        else {
+//
+//                        }
+//                    }
+//                }
+//            }
+//     }
 //         /// WRQ request received, send an ack packet
 //         /// run function for handling incoming messages
 
@@ -426,8 +428,8 @@ int main(int argc, char **argv) {
 //         /// end communication if got a data packet shorter than 516
 
 
-    }
+//  }
 
-    return 0;
+// return 0;
 
-}
+//}
