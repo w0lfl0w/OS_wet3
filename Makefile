@@ -9,7 +9,7 @@ RM = rm -f
 ttftps: $(OBJS)
 	$(CCLINK) $(CFLAGS) -o ttftps $(OBJS)
 # Creating the object files
-main.o: main.cpp readers_writers.h
+main.o: main.cpp 
 	$(CC) $(CFLAGS) -c main.cpp
 
 
