@@ -440,6 +440,7 @@ int main(int argc, char** argv) {
                 //curr_op = (short)buffer[0] << sizeof(char) | (short)buffer[1];
                 curr_op = ntohs(*(short*)(buffer));
 
+                // TODO: maybe should switch order between OPCODE_WRQ != curr_op and OPCODE_WRQ == curr_op.
                 if (OPCODE_WRQ != curr_op && !session_manager.is_curr_client(curr_client)) // if client that is not in curr session tries to send data
                 {
                     current_error = ErrorMsg(ERRCODE_UNKNOWN, MSG_UNKNOWN); // generate error msg for unknown user
