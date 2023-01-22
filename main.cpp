@@ -405,7 +405,7 @@ int main(int argc, char** argv) {
 
     /// infinite working loop
     while (1) {
-        sleep(1);
+        //sleep(1);
         memset(buffer, '\0', MAX_SOCKET_MSG_SIZE);
         FD_ZERO(&master);
         FD_SET(server_socket_listen_fd, &master);
@@ -444,7 +444,21 @@ int main(int argc, char** argv) {
                 if (OPCODE_WRQ != curr_op && !session_manager.is_curr_client(curr_client)) // if client that is not in curr session tries to send data
                 {
                     current_error = ErrorMsg(ERRCODE_UNKNOWN, MSG_UNKNOWN); // generate error msg for unknown user
-                    session_manager.error_occurred = true; // will send the packet at the end of the loop
+                    if (according_to_lior) // send error and dont kill original session
+                    {
+                        curr_client_addr_len = sizeof(curr_client);
+                        int bytes_sent = sendto(server_socket_listen_fd, &current_error, 4 + strlen(current_error.error_message) + 1, 0,
+                            (sockaddr*)&curr_client, curr_client_addr_len);
+                        if (0 > bytes_sent)
+                        {
+                            perror("TTFTP_ERROR: sendto failed");
+                            exit(1);
+                        }
+                    }
+                    else // according to PDF - send error to both clients and kill orig session.
+                    {
+                        session_manager.error_occurred = true;
+                    }
                     if (debug_flag)
                     {
                         cout << "curr_op is: " << curr_op << endl;
