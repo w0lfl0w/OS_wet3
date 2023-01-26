@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <unistd.h>
+#include <errno.h>
 
 
 #include <sys/types.h>
@@ -39,6 +40,8 @@
 #define OPCODE_ACK          4
 #define OPCODE_DATA         3
 #define OPCODE_ERROR        5
+
+#define FAILED              -1
 
 using std::FILE;
 using std::string;
@@ -146,20 +149,37 @@ public:
 
 
 bool file_exists(const std::string& name) {
-    FILE* file = fopen(name.c_str(), "r");
-    if (NULL != file) {
-        if (fclose(file) != 0) 
-        {
-            perror("TTFTP_ERROR: fclose failed");
-            exit(1);
-        }
+    int ok = access(name.c_str(), F_OK);
+    if (0 == ok) // file exists
+    {
         return true;
     }
-    else 
+    else if( FAILED == ok ) // the call failed
     {
-        //perror("TTFTP_ERROR");
-        return false;
+        if (ENOENT != errno) // if failed because file does not exist, continue
+        {
+            perror("TTFTP_ERROR: access failed");
+            exit(1);
+        }
     }
+    // if reached here then file does not exist
+    return false;
+
+    
+    //FILE* file = fopen(name.c_str(), "r");
+    //if (NULL != file) { // managed to open file forreading, means it exists.
+    //    if (fclose(file) != 0) 
+    //    {
+    //        perror("TTFTP_ERROR: fclose failed");
+    //        exit(1);
+    //    }
+    //    return true;
+    //}
+    //else // didnt manage to open file for reading - it does not exist or we dont have .
+    //{
+    //    //perror("TTFTP_ERROR");
+    //    return false;
+    //}
 }
 
 
@@ -356,18 +376,18 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    
-
     /// optional stronger init to add after calling socket(), add if getting errors like “address already in use”
     //int setsockopt(int server_socket_listen_fd, int level, int optname,  const void *optval, socklen_t optlen);
 
     /// init the environment for the sockaddr struct
     struct sockaddr_in server_address = { 0 };
     struct sockaddr_in curr_client = { 0 };
-    //struct sockaddr_in new_client = { 0 };
     socklen_t curr_client_addr_len = sizeof(curr_client);
-    //socklen_t new_client_addr_len = sizeof(new_client);
-    //int max_sd, sd, activity, new_socket;
+
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(port);
+    server_address.sin_addr.s_addr = INADDR_ANY;
+
     int activity = 0;
     int recvfrom_return_val = 0;
     //int client_socket[SOMAXCONN];
@@ -378,9 +398,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < SOMAXCONN; i++) { /// SOMAXCONN = max_clients
         //client_socket[i] = 0;
     }
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(port);
-    server_address.sin_addr.s_addr = INADDR_ANY;
+    
 
     /// assigns the address and port to the socket
     int bind_return_value = bind(server_socket_listen_fd, (struct sockaddr*)&server_address, sizeof(server_address));
@@ -410,6 +428,7 @@ int main(int argc, char** argv) {
         FD_ZERO(&master);
         FD_SET(server_socket_listen_fd, &master);
         tv.tv_sec = timeout; // reset tv to original count because select ruined it
+        tv.tv_usec = 0;
 
         /// there is a live session
         if (session_manager.is_active) {
@@ -422,7 +441,7 @@ int main(int argc, char** argv) {
             // use select with timeout
             activity = select(server_socket_listen_fd + 1, &master, NULL, NULL, &tv);
             
-            if (-1 == activity) // if select failed
+            if (FAILED == activity) // if select failed
             {
                 perror("TTFTP_ERROR: select failed");
                 exit(1);
@@ -443,7 +462,9 @@ int main(int argc, char** argv) {
                 // TODO: maybe should switch order between OPCODE_WRQ != curr_op and OPCODE_WRQ == curr_op.
                 if (OPCODE_WRQ != curr_op && !session_manager.is_curr_client(curr_client)) // if client that is not in curr session tries to send data
                 {
-                    current_error = ErrorMsg(ERRCODE_UNKNOWN, MSG_UNKNOWN); // generate error msg for unknown user
+                    //////current_error = ErrorMsg(ERRCODE_UNKNOWN, MSG_UNKNOWN); // generate error msg for unknown user
+
+                    current_error = ErrorMsg(ERRCODE_UNEXPECTED, MSG_UNEXPECTED); // generate msg for unexpected packet
                     if (according_to_lior) // send error and dont kill original session
                     {
                         curr_client_addr_len = sizeof(curr_client);
@@ -455,7 +476,7 @@ int main(int argc, char** argv) {
                             exit(1);
                         }
                     }
-                    else // according to PDF - send error to both clients and kill orig session.
+                    else // according to PDF - send error to first client and kill orig session, will cause sending err to orig at next iteration.
                     {
                         session_manager.error_occurred = true;
                     }
@@ -468,7 +489,7 @@ int main(int argc, char** argv) {
                 }
                 else if (OPCODE_WRQ == curr_op && !session_manager.is_curr_client(curr_client)) // if another client tries to start a session
                 {
-                    current_error = ErrorMsg(ERRCODE_UNEXPECTED, MSG_UNEXPECTED);
+                    current_error = ErrorMsg(ERRCODE_UNEXPECTED, MSG_UNEXPECTED); // generate msg for unexpected packet
                     if (according_to_lior) // send error and dont kill original session
                     {
                         curr_client_addr_len = sizeof(curr_client);
@@ -539,7 +560,7 @@ int main(int argc, char** argv) {
                         // if reached end of session 
                         if (recvfrom_return_val < MAX_SOCKET_MSG_SIZE)
                             // if data size is not MAX it means this is the last data packet, so end session.
-                            // if file size % MAX_DATA_SIZE == 0 client will send empty data packet to finish session.
+                            // if filesize % MAX_DATA_SIZE == 0 client will send empty data packet to finish session.
                         {
                             if (debug_flag)
                             {
@@ -581,7 +602,7 @@ int main(int argc, char** argv) {
                     }
                     if (debug_flag)
                     {
-                        cout << "resending ACK number " << session_manager.expected_block_num -1  << endl;
+                        cout << "resending ACK number " << session_manager.expected_block_num - 1  << endl;
                         cout << "bytes sent: " << bytes_sent << endl;
                     }
                     session_manager.resends_num++;
@@ -701,129 +722,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
-/////////////////////////// good until here ////////////////////////////////////////////////////////////////////
-
-
-
-
-// init the array of sockets - named master
-//    fd_set master;
-//    FD_ZERO(&master);
-//    FD_SET(server_socket_listen_fd, &master);
-//    if (debug_flag) {
-//        printf("\nAdding listener to master \n");
-//    }
-
-//    /// infinite run loop
-//    while (true) {
-//        /// make the set ready - clear it and add the listening socket to it
-//        FD_ZERO(&master);
-//        FD_SET(server_socket_listen_fd, &master);
-//        max_sd = server_socket_listen_fd;
-//
-//        /// add client sockets to set
-//        for (int i = 0; i < SOMAXCONN; i++) {
-//            //socket descriptor
-//            sd = client_socket[i];
-//
-//            //if valid socket descriptor then add to read list
-//            if (sd > 0)
-//                FD_SET(sd, &master);
-//
-//            //highest file descriptor number, need it for the select function
-//            max_sd = std::max(max_sd, sd);
-//        }
-//
-//        //wait for an activity on one of the sockets
-//        activity = select(max_sd + 1, &master, NULL, NULL, NULL);
-//
-//        if ((activity < 0) && (errno != EINTR)) {
-//            perror("TTFTP_ERROR");
-//            exit(0);
-//        }
-//
-////        if (activity) {
-////            cout << "got activity\n";
-////        }
-//
-//        /// if something happend in the listening socket its an incoming connection
-//        if (FD_ISSET(server_socket_listen_fd, &master)) {
-//            /// if there is an ongoing sessions send the appropriate error message
-//            if (session_manager.is_active) {
-//                if (debug_flag) {
-//                    cout << "got a new connection but we already have a session\n";
-//                }
-//                // send error message
-//            }
-//                /// start a session with this one
-//            else {
-//                if (debug_flag) {
-//                    cout << "starting a new session\n";
-//                }
-//                session_manager.is_active = true;
-//
-//                new_socket = accept(server_socket_listen_fd,
-//                                    (struct sockaddr *) &curr_client, (socklen_t *) &curr_client_addr_len);
-//                if (new_socket < 0) {
-//                    perror("TTFTP_ERROR");
-//                    exit(0);
-//                }
-//
-//                //session_manager.current_session_socket_fd = client_socket[i];
-//                // start a session
-//            }
-//        }
-//
-//
-//        for (int i = 0; i < SOMAXCONN; i++) {
-//            ///found active socket
-//            if (FD_ISSET(client_socket[i], &master)) {
-//                if (debug_flag) {
-//                    cout << "got new connection" << endl;
-//                }
-//                /// if something happend in the listening socket its an incoming connection
-//                if (server_socket_listen_fd == client_socket[i]) {
-//                    /// if there is an ongoing sessions send the appropriate error message
-//                    if (session_manager.is_active) {
-//                        // send error message
-//                    }
-//                        /// start a session with this one
-//                    else {
-//                        session_manager.is_active = true;
-//                        session_manager.current_session_socket_fd = client_socket[i];
-//                        // start a session
-//                    }
-//                }
-//
-//                    /// got something from client socket
-//                else {
-//                    /// find the active client
-//                    if (FD_ISSET(client_socket[i], &master)) {
-//                        /// check if the current socket is the one we are talking with
-//                        if (session_manager.is_curr_client(client_socket[i])) {
-//
-//                        }
-//                            /// if it isnt, send the correct error
-//                        else {
-//
-//                        }
-//                    }
-//                }
-//            }
-//     }
-//         /// WRQ request received, send an ack packet
-//         /// run function for handling incoming messages
-
-//         /// wait for packet
-
-//         /// send ack after each packet received
-
-//         /// end communication if got a data packet shorter than 516
-
-
-//  }
-
-// return 0;
-
-//}//
